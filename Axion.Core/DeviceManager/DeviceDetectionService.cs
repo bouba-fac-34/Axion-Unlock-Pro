@@ -20,6 +20,8 @@ namespace Axion.Core.DeviceManager
         {
             _adbPath = Path.Combine(toolsPath, "adb.exe");
             _fastbootPath = Path.Combine(toolsPath, "fastboot.exe");
+            if (!File.Exists(_adbPath)) _adbPath = "adb.exe";
+            if (!File.Exists(_fastbootPath)) _fastbootPath = "fastboot.exe";
         }
 
         public void StartMonitoring()
@@ -60,7 +62,6 @@ namespace Axion.Core.DeviceManager
 
         public async Task<DeviceInfo?> DetectAsync()
         {
-            // 1. ADB
             var adbOut = await ProcessRunner.RunAsync(_adbPath, "devices -l");
             var adbMatch = Regex.Match(adbOut, @"^(\S+)\s+(device|unauthorized|offline)", RegexOptions.Multiline);
             if (adbMatch.Success)
@@ -77,7 +78,6 @@ namespace Axion.Core.DeviceManager
                 }
             }
 
-            // 2. Fastboot
             var fbOut = await ProcessRunner.RunAsync(_fastbootPath, "devices");
             var fbMatch = Regex.Match(fbOut, @"^(\S+)\s+fastboot", RegexOptions.Multiline);
             if (fbMatch.Success)
@@ -93,7 +93,6 @@ namespace Axion.Core.DeviceManager
                 };
             }
 
-            // 3. USB VID/PID scan
             var usbDevices = GetUsbDevices();
             foreach (var usb in usbDevices)
             {
@@ -127,6 +126,7 @@ namespace Axion.Core.DeviceManager
             var device = Get("ro.product.device");
             var hardware = Get("ro.hardware");
             var android = Get("ro.build.version.release");
+            var patch = Get("ro.build.version.security_patch");
             var chipset = GuessChipset(hardware, Get("ro.board.platform"));
 
             int.TryParse(Get("ro.boot.battery") ?? "-1", out var battery);
@@ -138,6 +138,7 @@ namespace Axion.Core.DeviceManager
                 Codename = device,
                 Chipset = chipset,
                 AndroidVersion = android,
+                SecurityPatch = patch,
                 Serial = serial,
                 Mode = mode,
                 IsAuthorized = true,
@@ -171,6 +172,7 @@ namespace Axion.Core.DeviceManager
             if (product.Contains("oppo") || product.Contains("realme") || product.Contains("oneplus")) return "Oppo";
             if (product.Contains("huawei") || product.Contains("honor")) return "Huawei";
             if (product.Contains("motorola") || product.Contains("moto")) return "Motorola";
+            if (product.Contains("vivo")) return "Vivo";
             return "Unknown";
         }
 
