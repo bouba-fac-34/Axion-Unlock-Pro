@@ -1,0 +1,12 @@
+C:\work\projects\AxionUnlockPro\Axion.Core\bin\Debug\net8.0-windows\Axion.Core.deps.json
+C:\work\projects\AxionUnlockPro\Axion.Core\bin\Debug\net8.0-windows\Axion.Core.dll
+C:\work\projects\AxionUnlockPro\Axion.Core\bin\Debug\net8.0-windows\Axion.Core.pdb
+C:\work\projects\AxionUnlockPro\Axion.Core\obj\Debug\net8.0-windows\Axion.Core.csproj.AssemblyReference.cache
+C:\work\projects\AxionUnlockPro\Axion.Core\obj\Debug\net8.0-windows\Axion.Core.GeneratedMSBuildEditorConfig.editorconfig
+C:\work\projects\AxionUnlockPro\Axion.Core\obj\Debug\net8.0-windows\Axion.Core.AssemblyInfoInputs.cache
+C:\work\projects\AxionUnlockPro\Axion.Core\obj\Debug\net8.0-windows\Axion.Core.AssemblyInfo.cs
+C:\work\projects\AxionUnlockPro\Axion.Core\obj\Debug\net8.0-windows\Axion.Core.csproj.CoreCompileInputs.cache
+C:\work\projects\AxionUnlockPro\Axion.Core\obj\Debug\net8.0-windows\Axion.Core.dll
+C:\work\projects\AxionUnlockPro\Axion.Core\obj\Debug\net8.0-windows\refint\Axion.Core.dll
+C:\work\projects\AxionUnlockPro\Axion.Core\obj\Debug\net8.0-windows\Axion.Core.pdb
+C:\work\projects\AxionUnlockPro\Axion.Core\obj\Debug\net8.0-windows\ref\Axion.Core.dll
