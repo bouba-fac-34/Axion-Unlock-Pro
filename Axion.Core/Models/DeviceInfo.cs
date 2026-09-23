@@ -7,6 +7,7 @@ namespace Axion.Core.Models
         public string Codename { get; set; } = "";
         public string Chipset { get; set; } = "";
         public string AndroidVersion { get; set; } = "";
+        public string SecurityPatch { get; set; } = "";
         public string Serial { get; set; } = "";
         public string Imei { get; set; } = "";
         public ConnectionMode Mode { get; set; } = ConnectionMode.None;
@@ -15,7 +16,7 @@ namespace Axion.Core.Models
         public string Product { get; set; } = "";
         public string Hardware { get; set; } = "";
         public override string ToString() =>
-            $"{Brand} {Model} | {Mode} | {Chipset} | Android {AndroidVersion}";
+            $"{Brand} {Model} | {Mode} | {Chipset} | Android {AndroidVersion} | Patch {SecurityPatch}";
     }
 
     public enum ConnectionMode

@@ -77,42 +77,42 @@ namespace AxionUnlockPro
             {
                 "Samsung" => new (string, Func<Task>)[]
                 {
-                    ("Remove FRP", () => Run(async () => await new SamsungProtocol(_adb, AppendLog).RemoveFrpAsync(NeedDevice()))),
-                    ("Remove MDM / KG", () => Run(async () => await new SamsungProtocol(_adb, AppendLog).RemoveMdmAsync(NeedDevice()))),
-                    ("KG Anti-Relock", () => Run(async () => await new SamsungProtocol(_adb, AppendLog).RemoveKgRelockAsync(NeedDevice()))),
-                    ("Remove Screen Lock", () => Run(async () => await new SamsungProtocol(_adb, AppendLog).RemoveScreenLockAsync(NeedDevice()))),
-                    ("Factory Reset", () => Run(async () => await new SamsungProtocol(_adb, AppendLog).FactoryResetAsync(NeedDevice()))),
-                    ("Disable OTA", () => Run(async () => await new SamsungProtocol(_adb, AppendLog).DisableOtaAsync(NeedDevice()))),
-                    ("Read Device Info", () => Run(async () => await new SamsungProtocol(_adb, AppendLog).ReadInfoAsync(NeedDevice())))
+                    ("Remove FRP", () => RunResult(async () => await new SamsungProtocol(_adb, AppendLog).RemoveFrpAsync(NeedDevice()))),
+                    ("Remove MDM / KG", () => RunResult(async () => await new SamsungProtocol(_adb, AppendLog).RemoveMdmAsync(NeedDevice()))),
+                    ("KG Anti-Relock", () => RunResult(async () => await new SamsungProtocol(_adb, AppendLog).RemoveKgRelockAsync(NeedDevice()))),
+                    ("Remove Screen Lock", () => RunResult(async () => await new SamsungProtocol(_adb, AppendLog).RemoveScreenLockAsync(NeedDevice()))),
+                    ("Factory Reset", () => RunResult(async () => await new SamsungProtocol(_adb, AppendLog).FactoryResetAsync(NeedDevice()))),
+                    ("Disable OTA", () => RunResult(async () => await new SamsungProtocol(_adb, AppendLog).DisableOtaAsync(NeedDevice()))),
+                    ("Read Device Info", () => RunResult(async () => await new SamsungProtocol(_adb, AppendLog).ReadInfoAsync(NeedDevice())))
                 },
                 "Transsion" => new (string, Func<Task>)[]
                 {
-                    ("Remove FRP", () => Run(async () => await new TranssionProtocol(_adb, AppendLog).RemoveFrpAsync(NeedDevice()))),
-                    ("Remove MDM", () => Run(async () => await new TranssionProtocol(_adb, AppendLog).RemoveMdmAsync(NeedDevice()))),
-                    ("Remove Pattern/PIN", () => Run(async () => await new TranssionProtocol(_adb, AppendLog).RemoveLockAsync(NeedDevice()))),
-                    ("Disable OTA (anti-relock)", () => Run(async () => await new TranssionProtocol(_adb, AppendLog).DisableOtaAsync(NeedDevice())))
+                    ("Remove FRP", () => RunResult(async () => await new TranssionProtocol(_adb, AppendLog).RemoveFrpAsync(NeedDevice()))),
+                    ("Remove MDM", () => RunResult(async () => await new TranssionProtocol(_adb, AppendLog).RemoveMdmAsync(NeedDevice()))),
+                    ("Remove Pattern/PIN", () => RunResult(async () => await new TranssionProtocol(_adb, AppendLog).RemoveLockAsync(NeedDevice()))),
+                    ("Disable OTA (anti-relock)", () => RunResult(async () => await new TranssionProtocol(_adb, AppendLog).DisableOtaAsync(NeedDevice())))
                 },
                 "Xiaomi" => new (string, Func<Task>)[]
                 {
-                    ("Remove FRP", () => Run(async () => await new XiaomiProtocol(_adb, _fb, AppendLog).RemoveFrpAsync(NeedDevice()))),
-                    ("Remove Mi Account", () => Run(async () => await new XiaomiProtocol(_adb, _fb, AppendLog).RemoveMiAccountAsync(NeedDevice()))),
-                    ("Fastboot to EDL", () => Run(async () => await new XiaomiProtocol(_adb, _fb, AppendLog).FastbootToEdlAsync(NeedDevice())))
+                    ("Remove FRP", () => RunResult(async () => await new XiaomiProtocol(_adb, _fb, AppendLog).RemoveFrpAsync(NeedDevice()))),
+                    ("Remove Mi Account", () => RunResult(async () => await new XiaomiProtocol(_adb, _fb, AppendLog).RemoveMiAccountAsync(NeedDevice()))),
+                    ("Fastboot to EDL", () => RunResult(async () => await new XiaomiProtocol(_adb, _fb, AppendLog).FastbootToEdlAsync(NeedDevice())))
                 },
                 "Oppo" => new (string, Func<Task>)[]
                 {
-                    ("Remove FRP + Demo", () => Run(async () => await new OppoProtocol(_adb, AppendLog).RemoveFrpAsync(NeedDevice()))),
-                    ("Remove MDM", () => Run(async () => await new OppoProtocol(_adb, AppendLog).RemoveMdmAsync(NeedDevice())))
+                    ("Remove FRP + Demo", () => RunResult(async () => await new OppoProtocol(_adb, AppendLog).RemoveFrpAsync(NeedDevice()))),
+                    ("Remove MDM", () => RunResult(async () => await new OppoProtocol(_adb, AppendLog).RemoveMdmAsync(NeedDevice())))
                 },
                 "MTK" => new (string, Func<Task>)[]
                 {
-                    ("FRP (DA/BROM)", () => Run(async () => await new MtkProtocol(AppendLog).RemoveFrpAsync(NeedDevice()))),
-                    ("Format + FRP", () => Run(async () => await new MtkProtocol(AppendLog).FormatFrpAsync(NeedDevice()))),
-                    ("Read GPT", () => Run(async () => await new MtkProtocol(AppendLog).ReadGptAsync(NeedDevice())))
+                    ("FRP (DA/BROM)", () => RunResult(async () => await new MtkProtocol(AppendLog).RemoveFrpAsync(NeedDevice()))),
+                    ("Format + FRP", () => RunResult(async () => await new MtkProtocol(AppendLog).FormatFrpAsync(NeedDevice()))),
+                    ("Read GPT", () => RunResult(async () => await new MtkProtocol(AppendLog).ReadGptAsync(NeedDevice())))
                 },
                 "Qualcomm" => new (string, Func<Task>)[]
                 {
-                    ("EDL FRP", () => Run(async () => await new QualcommProtocol(AppendLog).EdlFrpAsync(NeedDevice()))),
-                    ("Identify", () => Run(async () => await new QualcommProtocol(AppendLog).IdentifyAsync(NeedDevice())))
+                    ("EDL FRP", () => RunResult(async () => await new QualcommProtocol(AppendLog).EdlFrpAsync(NeedDevice()))),
+                    ("Identify", () => RunResult(async () => await new QualcommProtocol(AppendLog).IdentifyAsync(NeedDevice())))
                 },
                 "Huawei" or "Motorola" or "Vivo" or "SPD" or "Universal" => new (string, Func<Task>)[]
                 {
@@ -146,7 +146,7 @@ namespace AxionUnlockPro
             finally { _busy = false; }
         }
 
-        private async Task Run(Func<Task<OperationResult>> work)
+        private async Task RunResult(Func<Task<OperationResult>> work)
         {
             if (_busy) return;
             _busy = true;

@@ -113,6 +113,33 @@ namespace Axion.Core.Protocols.Transsion
             }
         }
 
+        public async Task<OperationResult> DisableOtaAsync(DeviceInfo device)
+        {
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            var log = new System.Text.StringBuilder();
+            void L(string m) { log.AppendLine(m); _log(m); }
+
+            try
+            {
+                L("Transsion Disable OTA (anti-relock) started");
+                if (device.Mode != ConnectionMode.ADB || !device.IsAuthorized)
+                    return Fail("ADB authorized connection required", log.ToString(), sw.Elapsed);
+
+                await Adb(device.Serial, "shell settings put global ota_disable_automatic_update 1");
+                await Adb(device.Serial, "shell pm disable-user --user 0 com.transsion.systemupdate");
+                await Adb(device.Serial, "shell pm clear com.transsion.systemupdate");
+                await Adb(device.Serial, "shell settings put global device_provisioned 1");
+                L("OTA disabled and systemupdate restricted");
+                sw.Stop();
+                return Ok("OTA disabled (anti-relock)", log.ToString(), sw.Elapsed);
+            }
+            catch (Exception ex)
+            {
+                sw.Stop();
+                return Fail(ex.Message, log.ToString(), sw.Elapsed);
+            }
+        }
+
         public async Task<OperationResult> ImeiRepairAsync(DeviceInfo device, string imei1, string? imei2 = null)
         {
             var sw = System.Diagnostics.Stopwatch.StartNew();

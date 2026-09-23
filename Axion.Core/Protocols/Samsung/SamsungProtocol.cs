@@ -89,6 +89,35 @@ namespace Axion.Core.Protocols.Samsung
             }
         }
 
+        public async Task<OperationResult> RemoveKgRelockAsync(DeviceInfo device)
+        {
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            var log = new System.Text.StringBuilder();
+            void L(string m) { log.AppendLine(m); _log(m); }
+
+            try
+            {
+                L("Samsung KG Anti-Relock started");
+                if (device.Mode != ConnectionMode.ADB || !device.IsAuthorized)
+                    return Fail("ADB authorized connection required", log.ToString(), sw.Elapsed);
+
+                await Adb(device.Serial, "shell pm clear com.samsung.android.kgclient");
+                await Adb(device.Serial, "shell pm disable-user --user 0 com.samsung.android.kgclient");
+                await Adb(device.Serial, "shell settings put global kg_state 0");
+                await Adb(device.Serial, "shell settings put secure kg_locked 0");
+                await Adb(device.Serial, "shell settings put global device_provisioned 1");
+                await Adb(device.Serial, "shell settings put secure user_setup_complete 1");
+                L("KG client cleared and relock flags disabled");
+                sw.Stop();
+                return Ok("KG Anti-Relock applied", log.ToString(), sw.Elapsed);
+            }
+            catch (Exception ex)
+            {
+                sw.Stop();
+                return Fail(ex.Message, log.ToString(), sw.Elapsed);
+            }
+        }
+
         public async Task<OperationResult> RemoveScreenLockAsync(DeviceInfo device)
         {
             var sw = System.Diagnostics.Stopwatch.StartNew();
@@ -112,6 +141,94 @@ namespace Axion.Core.Protocols.Samsung
                 await Adb(device.Serial, "reboot");
                 sw.Stop();
                 return Ok("Screen lock removed – device rebooting", log.ToString(), sw.Elapsed);
+            }
+            catch (Exception ex)
+            {
+                sw.Stop();
+                return Fail(ex.Message, log.ToString(), sw.Elapsed);
+            }
+        }
+
+        public async Task<OperationResult> FactoryResetAsync(DeviceInfo device)
+        {
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            var log = new System.Text.StringBuilder();
+            void L(string m) { log.AppendLine(m); _log(m); }
+
+            try
+            {
+                L("Samsung factory reset started");
+                if (device.Mode != ConnectionMode.ADB || !device.IsAuthorized)
+                    return Fail("ADB authorized connection required", log.ToString(), sw.Elapsed);
+
+                await Adb(device.Serial, "shell recovery --wipe_data");
+                await Adb(device.Serial, "reboot recovery");
+                L("Wipe data + reboot recovery issued");
+                sw.Stop();
+                return Ok("Factory reset triggered – device rebooting to recovery", log.ToString(), sw.Elapsed);
+            }
+            catch (Exception ex)
+            {
+                sw.Stop();
+                return Fail(ex.Message, log.ToString(), sw.Elapsed);
+            }
+        }
+
+        public async Task<OperationResult> DisableOtaAsync(DeviceInfo device)
+        {
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            var log = new System.Text.StringBuilder();
+            void L(string m) { log.AppendLine(m); _log(m); }
+
+            try
+            {
+                L("Samsung Disable OTA started");
+                if (device.Mode != ConnectionMode.ADB || !device.IsAuthorized)
+                    return Fail("ADB authorized connection required", log.ToString(), sw.Elapsed);
+
+                await Adb(device.Serial, "shell settings put global ota_disable_automatic_update 1");
+                await Adb(device.Serial, "shell pm disable-user --user 0 com.wssyncmldm");
+                await Adb(device.Serial, "shell pm disable-user --user 0 com.sec.android.soagent");
+                await Adb(device.Serial, "shell pm clear com.wssyncmldm");
+                L("OTA auto-update disabled and related packages restricted");
+                sw.Stop();
+                return Ok("OTA disabled", log.ToString(), sw.Elapsed);
+            }
+            catch (Exception ex)
+            {
+                sw.Stop();
+                return Fail(ex.Message, log.ToString(), sw.Elapsed);
+            }
+        }
+
+        public async Task<OperationResult> ReadInfoAsync(DeviceInfo device)
+        {
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            var log = new System.Text.StringBuilder();
+            void L(string m) { log.AppendLine(m); _log(m); }
+
+            try
+            {
+                L("Samsung Read Device Info started");
+                if (device.Mode != ConnectionMode.ADB || !device.IsAuthorized)
+                    return Fail("ADB authorized connection required", log.ToString(), sw.Elapsed);
+
+                var model = await Adb(device.Serial, "shell getprop ro.product.model");
+                var brand = await Adb(device.Serial, "shell getprop ro.product.brand");
+                var version = await Adb(device.Serial, "shell getprop ro.build.version.release");
+                var patch = await Adb(device.Serial, "shell getprop ro.build.version.security_patch");
+                var serial = await Adb(device.Serial, "shell getprop ro.serialno");
+                var chipset = await Adb(device.Serial, "shell getprop ro.hardware");
+
+                L($"Brand: {brand.Trim()}");
+                L($"Model: {model.Trim()}");
+                L($"Android: {version.Trim()}");
+                L($"Security Patch: {patch.Trim()}");
+                L($"Serial: {serial.Trim()}");
+                L($"Hardware: {chipset.Trim()}");
+
+                sw.Stop();
+                return Ok("Device info read", log.ToString(), sw.Elapsed);
             }
             catch (Exception ex)
             {
