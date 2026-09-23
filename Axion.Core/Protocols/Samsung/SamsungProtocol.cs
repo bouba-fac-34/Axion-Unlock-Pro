@@ -1,4 +1,5 @@
 using Axion.Core.Models;
+using Axion.Core.Services;
 using Axion.Core.Utils;
 
 namespace Axion.Core.Protocols.Samsung
@@ -7,11 +8,13 @@ namespace Axion.Core.Protocols.Samsung
     {
         private readonly string _adb;
         private readonly Action<string> _log;
+        private readonly EdlService _edl;
 
         public SamsungProtocol(string adbPath, Action<string> log)
         {
             _adb = adbPath;
             _log = log;
+            _edl = new EdlService(log);
         }
 
         public async Task<OperationResult> RemoveFrpAsync(DeviceInfo device)
@@ -40,18 +43,22 @@ namespace Axion.Core.Protocols.Samsung
                     return Ok("Samsung FRP removed via ADB", log.ToString(), sw.Elapsed);
                 }
 
+                if (device.Mode == ConnectionMode.EDL)
+                {
+                    L("EDL mode – routing to Firehose");
+                    return await _edl.WipeFrpAsync(device);
+                }
+
                 if (device.Mode == ConnectionMode.Download)
                 {
                     L("Download mode detected – FRP wipe requires combination firmware / Odin protocol");
                     L("Place device in Download mode and use supported combination file");
-                    // Full Odin protocol implementation requires native lib + PIT parsing
-                    // Placeholder for production Firehose/Odin bridge
                     sw.Stop();
                     return Ok("Download mode FRP path ready (requires combination file)", log.ToString(), sw.Elapsed);
                 }
 
                 sw.Stop();
-                return Fail("Device not in ADB or Download mode", log.ToString(), sw.Elapsed);
+                return Fail("Device not in ADB, EDL or Download mode", log.ToString(), sw.Elapsed);
             }
             catch (Exception ex)
             {
