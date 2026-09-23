@@ -1,5 +1,3 @@
-using System;
-using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -8,17 +6,20 @@ using Axion.Core.DeviceManager;
 using Axion.Core.Models;
 using Axion.Core.Protocols.Samsung;
 using Axion.Core.Protocols.Transsion;
+using Axion.Core.Protocols.Xiaomi;
+using Axion.Core.Protocols.Oppo;
 using Axion.Core.Protocols.MTK;
 using Axion.Core.Protocols.Qualcomm;
+using Axion.Core.Utils;
 
 namespace AxionUnlockPro
 {
     public partial class MainWindow : Window
     {
         private readonly DeviceDetectionService _detector;
-        private DeviceInfo? _currentDevice;
-        private string _selectedBrand = "";
-        private readonly string _adbPath;
+        private DeviceInfo? _device;
+        private readonly string _adb;
+        private readonly string _fb;
         private bool _busy;
 
         public MainWindow()
@@ -26,287 +27,180 @@ namespace AxionUnlockPro
             InitializeComponent();
             var baseDir = AppDomain.CurrentDomain.BaseDirectory;
             var bin = System.IO.Path.Combine(baseDir, "bin");
-            _adbPath = System.IO.Path.Combine(bin, "adb.exe");
-            if (!System.IO.File.Exists(_adbPath))
-                _adbPath = "adb.exe"; // fallback to PATH
+            _adb = System.IO.Path.Combine(bin, "adb.exe");
+            _fb = System.IO.Path.Combine(bin, "fastboot.exe");
+            if (!System.IO.File.Exists(_adb)) _adb = "adb.exe";
+            if (!System.IO.File.Exists(_fb)) _fb = "fastboot.exe";
 
             _detector = new DeviceDetectionService(bin);
-            _detector.DeviceConnected += OnDeviceConnected;
-            _detector.DeviceDisconnected += OnDeviceDisconnected;
-            _detector.LogMessage += msg => Dispatcher.Invoke(() => AppendLog(msg));
+            _detector.DeviceConnected += d => Dispatcher.Invoke(() =>
+            {
+                _device = d;
+                txtDeviceStatus.Text = $"{d.Brand} {d.Model}";
+                txtDeviceDetails.Text = $"{d.Mode} | {d.Chipset} | Android {d.AndroidVersion} | Patch {d.SecurityPatch} | {d.Serial}";
+                statusDot.Fill = d.Mode == ConnectionMode.Unauthorized
+                    ? new SolidColorBrush(Color.FromRgb(255, 171, 0))
+                    : new SolidColorBrush(Color.FromRgb(0, 200, 83));
+                txtSession.Text = $"Live: {d}";
+            });
+            _detector.DeviceDisconnected += () => Dispatcher.Invoke(() =>
+            {
+                _device = null;
+                txtDeviceStatus.Text = "No device connected";
+                txtDeviceDetails.Text = "Connect phone · USB debugging ON · authorize PC";
+                statusDot.Fill = new SolidColorBrush(Color.FromRgb(255, 82, 82));
+                txtSession.Text = "Disconnected";
+            });
+            _detector.LogMessage += m => Dispatcher.Invoke(() => AppendLog(m));
 
             Loaded += (_, _) =>
             {
-                AppendLog("Axion Unlock Pro started");
-                AppendLog("Place adb.exe + fastboot.exe in bin/ folder for full detection");
+                AppendLog("Axion Unlock Pro v2.0 ready");
+                AppendLog("Place adb.exe + fastboot.exe in bin/ next to the exe");
                 _detector.StartMonitoring();
             };
             Closed += (_, _) => _detector.StopMonitoring();
         }
 
-        private void OnDeviceConnected(DeviceInfo device)
-        {
-            Dispatcher.Invoke(() =>
-            {
-                _currentDevice = device;
-                txtDeviceStatus.Text = $"{device.Brand} {device.Model}";
-                txtDeviceDetails.Text = $"{device.Mode} | {device.Chipset} | Android {device.AndroidVersion} | S/N: {device.Serial}";
-                statusDot.Fill = device.Mode == ConnectionMode.Unauthorized
-                    ? new SolidColorBrush(Color.FromRgb(255, 170, 0))
-                    : new SolidColorBrush(Color.FromRgb(0, 200, 83));
-                txtSession.Text = $"Connected: {device}";
-            });
-        }
-
-        private void OnDeviceDisconnected()
-        {
-            Dispatcher.Invoke(() =>
-            {
-                _currentDevice = null;
-                txtDeviceStatus.Text = "No device connected";
-                txtDeviceDetails.Text = "Connect a phone via USB";
-                statusDot.Fill = new SolidColorBrush(Color.FromRgb(255, 68, 68));
-                txtSession.Text = "Device disconnected";
-            });
-        }
-
         private void Brand_Click(object sender, RoutedEventArgs e)
         {
-            if (sender is Button btn && btn.Tag is string brand)
-            {
-                _selectedBrand = brand;
-                txtSession.Text = $"Selected: {brand}";
-                BuildOperations(brand);
-                AppendLog($"Brand selected: {brand}");
-            }
+            if (sender is not Button btn || btn.Tag is not string brand) return;
+            txtSession.Text = $"Brand: {brand}";
+            AppendLog($"Selected {brand}");
+            BuildOps(brand);
         }
 
-        private void BuildOperations(string brand)
+        private void BuildOps(string brand)
         {
             opsPanel.Children.Clear();
-            var ops = brand switch
+            var list = brand switch
             {
-                "Samsung" => new[]
+                "Samsung" => new (string, Func<Task>)[]
                 {
-                    ("Remove FRP", (Func<Task>)(() => RunSamsungFrp())),
-                    ("Remove MDM / Knox", (Func<Task>)(() => RunSamsungMdm())),
-                    ("Remove Screen Lock", (Func<Task>)(() => RunSamsungLock())),
-                    ("Network Unlock", (Func<Task>)(() => RunSamsungNetwork()))
+                    ("Remove FRP", () => Run(async () => await new SamsungProtocol(_adb, AppendLog).RemoveFrpAsync(NeedDevice()))),
+                    ("Remove MDM / KG", () => Run(async () => await new SamsungProtocol(_adb, AppendLog).RemoveMdmAsync(NeedDevice()))),
+                    ("KG Anti-Relock", () => Run(async () => await new SamsungProtocol(_adb, AppendLog).RemoveKgRelockAsync(NeedDevice()))),
+                    ("Remove Screen Lock", () => Run(async () => await new SamsungProtocol(_adb, AppendLog).RemoveScreenLockAsync(NeedDevice()))),
+                    ("Factory Reset", () => Run(async () => await new SamsungProtocol(_adb, AppendLog).FactoryResetAsync(NeedDevice()))),
+                    ("Disable OTA", () => Run(async () => await new SamsungProtocol(_adb, AppendLog).DisableOtaAsync(NeedDevice()))),
+                    ("Read Device Info", () => Run(async () => await new SamsungProtocol(_adb, AppendLog).ReadInfoAsync(NeedDevice())))
                 },
-                "Transsion" => new[]
+                "Transsion" => new (string, Func<Task>)[]
                 {
-                    ("Remove FRP", (Func<Task>)(() => RunTranssionFrp())),
-                    ("Remove MDM", (Func<Task>)(() => RunTranssionMdm())),
-                    ("Remove Pattern/PIN", (Func<Task>)(() => RunTranssionLock())),
-                    ("IMEI Repair", (Func<Task>)(() => RunTranssionImei()))
+                    ("Remove FRP", () => Run(async () => await new TranssionProtocol(_adb, AppendLog).RemoveFrpAsync(NeedDevice()))),
+                    ("Remove MDM", () => Run(async () => await new TranssionProtocol(_adb, AppendLog).RemoveMdmAsync(NeedDevice()))),
+                    ("Remove Pattern/PIN", () => Run(async () => await new TranssionProtocol(_adb, AppendLog).RemoveLockAsync(NeedDevice()))),
+                    ("Disable OTA (anti-relock)", () => Run(async () => await new TranssionProtocol(_adb, AppendLog).DisableOtaAsync(NeedDevice())))
                 },
-                "MTK" => new[]
+                "Xiaomi" => new (string, Func<Task>)[]
                 {
-                    ("FRP Bypass", (Func<Task>)(() => RunMtkFrp())),
-                    ("Format + FRP", (Func<Task>)(() => RunMtkFormat())),
-                    ("Read GPT", (Func<Task>)(() => RunMtkGpt()))
+                    ("Remove FRP", () => Run(async () => await new XiaomiProtocol(_adb, _fb, AppendLog).RemoveFrpAsync(NeedDevice()))),
+                    ("Remove Mi Account", () => Run(async () => await new XiaomiProtocol(_adb, _fb, AppendLog).RemoveMiAccountAsync(NeedDevice()))),
+                    ("Fastboot to EDL", () => Run(async () => await new XiaomiProtocol(_adb, _fb, AppendLog).FastbootToEdlAsync(NeedDevice())))
                 },
-                "Qualcomm" => new[]
+                "Oppo" => new (string, Func<Task>)[]
                 {
-                    ("EDL FRP", (Func<Task>)(() => RunQcFrp())),
-                    ("Identify", (Func<Task>)(() => RunQcIdentify())),
-                    ("Wipe FRP", (Func<Task>)(() => RunQcWipe()))
+                    ("Remove FRP + Demo", () => Run(async () => await new OppoProtocol(_adb, AppendLog).RemoveFrpAsync(NeedDevice()))),
+                    ("Remove MDM", () => Run(async () => await new OppoProtocol(_adb, AppendLog).RemoveMdmAsync(NeedDevice())))
                 },
-                "Xiaomi" => new[]
+                "MTK" => new (string, Func<Task>)[]
                 {
-                    ("Remove FRP (ADB)", (Func<Task>)(() => RunGenericFrp("Xiaomi"))),
-                    ("Info", (Func<Task>)(() => Task.Run(() => AppendLog("Xiaomi: use EDL + auth for locked devices"))))
+                    ("FRP (DA/BROM)", () => Run(async () => await new MtkProtocol(AppendLog).RemoveFrpAsync(NeedDevice()))),
+                    ("Format + FRP", () => Run(async () => await new MtkProtocol(AppendLog).FormatFrpAsync(NeedDevice()))),
+                    ("Read GPT", () => Run(async () => await new MtkProtocol(AppendLog).ReadGptAsync(NeedDevice())))
                 },
-                "Oppo" => new[]
+                "Qualcomm" => new (string, Func<Task>)[]
                 {
-                    ("Remove FRP (ADB)", (Func<Task>)(() => RunGenericFrp("Oppo")))
+                    ("EDL FRP", () => Run(async () => await new QualcommProtocol(AppendLog).EdlFrpAsync(NeedDevice()))),
+                    ("Identify", () => Run(async () => await new QualcommProtocol(AppendLog).IdentifyAsync(NeedDevice())))
                 },
-                "Huawei" => new[]
+                "Huawei" or "Motorola" or "Vivo" or "SPD" or "Universal" => new (string, Func<Task>)[]
                 {
-                    ("Remove FRP (ADB)", (Func<Task>)(() => RunGenericFrp("Huawei")))
+                    ("Universal FRP (ADB)", () => Run(GenericFrp)),
+                    ("Disable OTA", () => Run(GenericDisableOta)),
+                    ("Factory Reset (ADB)", () => Run(GenericFactoryReset))
                 },
-                "Motorola" => new[]
-                {
-                    ("Remove FRP (ADB)", (Func<Task>)(() => RunGenericFrp("Motorola")))
-                },
-                _ => new[]
-                {
-                    ("Generic FRP (ADB)", (Func<Task>)(() => RunGenericFrp("Generic")))
-                }
+                _ => Array.Empty<(string, Func<Task>)>()
             };
 
-            foreach (var (title, action) in ops)
+            foreach (var (title, action) in list)
             {
-                var b = new Button
-                {
-                    Content = title,
-                    Style = (Style)FindResource("OpBtn"),
-                    MinWidth = 160,
-                    MinHeight = 48
-                };
-                b.Click += async (_, _) =>
-                {
-                    if (_busy) return;
-                    _busy = true;
-                    b.IsEnabled = false;
-                    try { await action(); }
-                    finally
-                    {
-                        _busy = false;
-                        b.IsEnabled = true;
-                    }
-                };
+                var b = new Button { Content = title, Style = (Style)FindResource("OpBtn"), MinWidth = 150, MinHeight = 46 };
+                b.Click += async (_, _) => await action();
                 opsPanel.Children.Add(b);
             }
         }
 
-        private async Task RunSamsungFrp()
+        private DeviceInfo NeedDevice()
         {
-            if (_currentDevice == null) { AppendLog("No device"); return; }
-            var proto = new SamsungProtocol(_adbPath, AppendLog);
-            var r = await proto.RemoveFrpAsync(_currentDevice);
-            AppendLog(r.Success ? $"OK: {r.Message}" : $"FAIL: {r.Message}");
+            if (_device == null) throw new InvalidOperationException("No device connected");
+            return _device;
         }
 
-        private async Task RunSamsungMdm()
+        private async Task Run(Func<Task> work)
         {
-            if (_currentDevice == null) { AppendLog("No device"); return; }
-            var proto = new SamsungProtocol(_adbPath, AppendLog);
-            var r = await proto.RemoveMdmAsync(_currentDevice);
-            AppendLog(r.Success ? $"OK: {r.Message}" : $"FAIL: {r.Message}");
+            if (_busy) return;
+            _busy = true;
+            try { await work(); }
+            catch (Exception ex) { AppendLog($"FAIL: {ex.Message}"); }
+            finally { _busy = false; }
         }
 
-        private async Task RunSamsungLock()
+        private async Task Run(Func<Task<OperationResult>> work)
         {
-            if (_currentDevice == null) { AppendLog("No device"); return; }
-            var proto = new SamsungProtocol(_adbPath, AppendLog);
-            var r = await proto.RemoveScreenLockAsync(_currentDevice);
-            AppendLog(r.Success ? $"OK: {r.Message}" : $"FAIL: {r.Message}");
-        }
-
-        private async Task RunSamsungNetwork()
-        {
-            if (_currentDevice == null) { AppendLog("No device"); return; }
-            var proto = new SamsungProtocol(_adbPath, AppendLog);
-            var r = await proto.NetworkUnlockAsync(_currentDevice);
-            AppendLog(r.Message);
-        }
-
-        private async Task RunTranssionFrp()
-        {
-            if (_currentDevice == null) { AppendLog("No device"); return; }
-            var proto = new TranssionProtocol(_adbPath, AppendLog);
-            var r = await proto.RemoveFrpAsync(_currentDevice);
-            AppendLog(r.Success ? $"OK: {r.Message}" : $"FAIL: {r.Message}");
-        }
-
-        private async Task RunTranssionMdm()
-        {
-            if (_currentDevice == null) { AppendLog("No device"); return; }
-            var proto = new TranssionProtocol(_adbPath, AppendLog);
-            var r = await proto.RemoveMdmAsync(_currentDevice);
-            AppendLog(r.Success ? $"OK: {r.Message}" : $"FAIL: {r.Message}");
-        }
-
-        private async Task RunTranssionLock()
-        {
-            if (_currentDevice == null) { AppendLog("No device"); return; }
-            var proto = new TranssionProtocol(_adbPath, AppendLog);
-            var r = await proto.RemoveLockAsync(_currentDevice);
-            AppendLog(r.Success ? $"OK: {r.Message}" : $"FAIL: {r.Message}");
-        }
-
-        private async Task RunTranssionImei()
-        {
-            if (_currentDevice == null) { AppendLog("No device"); return; }
-            var proto = new TranssionProtocol(_adbPath, AppendLog);
-            var r = await proto.ImeiRepairAsync(_currentDevice, "000000000000000");
-            AppendLog(r.Message);
-        }
-
-        private async Task RunMtkFrp()
-        {
-            if (_currentDevice == null) { AppendLog("No device"); return; }
-            var proto = new MtkProtocol(AppendLog);
-            var r = await proto.RemoveFrpAsync(_currentDevice);
-            AppendLog(r.Success ? $"OK: {r.Message}" : $"FAIL: {r.Message}");
-        }
-
-        private async Task RunMtkFormat()
-        {
-            if (_currentDevice == null) { AppendLog("No device"); return; }
-            var proto = new MtkProtocol(AppendLog);
-            var r = await proto.FormatFrpAsync(_currentDevice);
-            AppendLog(r.Message);
-        }
-
-        private async Task RunMtkGpt()
-        {
-            if (_currentDevice == null) { AppendLog("No device"); return; }
-            var proto = new MtkProtocol(AppendLog);
-            var r = await proto.ReadGptAsync(_currentDevice);
-            AppendLog(r.Message);
-        }
-
-        private async Task RunQcFrp()
-        {
-            if (_currentDevice == null) { AppendLog("No device"); return; }
-            var proto = new QualcommProtocol(AppendLog);
-            var r = await proto.EdlFrpAsync(_currentDevice);
-            AppendLog(r.Success ? $"OK: {r.Message}" : $"FAIL: {r.Message}");
-        }
-
-        private async Task RunQcIdentify()
-        {
-            if (_currentDevice == null) { AppendLog("No device"); return; }
-            var proto = new QualcommProtocol(AppendLog);
-            var r = await proto.IdentifyAsync(_currentDevice);
-            AppendLog(r.Message);
-        }
-
-        private async Task RunQcWipe()
-        {
-            if (_currentDevice == null) { AppendLog("No device"); return; }
-            var proto = new QualcommProtocol(AppendLog);
-            var r = await proto.WipeFrpAsync(_currentDevice);
-            AppendLog(r.Message);
-        }
-
-        private async Task RunGenericFrp(string brand)
-        {
-            if (_currentDevice == null || _currentDevice.Mode != ConnectionMode.ADB)
+            if (_busy) return;
+            _busy = true;
+            try
             {
-                AppendLog("ADB authorized device required");
-                return;
+                var r = await work();
+                AppendLog(r.Success ? $"OK · {r.Message} ({r.Duration.TotalSeconds:0.0}s)" : $"FAIL · {r.Message}");
             }
-            AppendLog($"{brand} generic FRP via ADB...");
-            var serial = _currentDevice.Serial;
-            await Axion.Core.Utils.ProcessRunner.RunAsync(_adbPath, $"-s {serial} shell pm clear com.google.android.gsf");
-            await Axion.Core.Utils.ProcessRunner.RunAsync(_adbPath, $"-s {serial} shell pm clear com.google.android.gsf.login");
-            await Axion.Core.Utils.ProcessRunner.RunAsync(_adbPath, $"-s {serial} shell pm clear com.google.android.gms");
-            await Axion.Core.Utils.ProcessRunner.RunAsync(_adbPath, $"-s {serial} shell settings put secure user_setup_complete 1");
-            AppendLog("Generic FRP packages cleared – reboot device");
+            catch (Exception ex) { AppendLog($"FAIL: {ex.Message}"); }
+            finally { _busy = false; }
+        }
+
+        private async Task GenericFrp()
+        {
+            var d = NeedDevice();
+            if (d.Mode != ConnectionMode.ADB || !d.IsAuthorized) { AppendLog("ADB authorized required"); return; }
+            AppendLog("Universal FRP…");
+            await ProcessRunner.RunAsync(_adb, $"-s {d.Serial} shell pm clear com.google.android.gsf");
+            await ProcessRunner.RunAsync(_adb, $"-s {d.Serial} shell pm clear com.google.android.gsf.login");
+            await ProcessRunner.RunAsync(_adb, $"-s {d.Serial} shell pm clear com.google.android.gms");
+            await ProcessRunner.RunAsync(_adb, $"-s {d.Serial} shell settings put secure user_setup_complete 1");
+            await ProcessRunner.RunAsync(_adb, $"-s {d.Serial} shell settings put global device_provisioned 1");
+            AppendLog("FRP flags cleared – reboot device");
+        }
+
+        private async Task GenericDisableOta()
+        {
+            var d = NeedDevice();
+            if (d.Mode != ConnectionMode.ADB || !d.IsAuthorized) { AppendLog("ADB required"); return; }
+            await ProcessRunner.RunAsync(_adb, $"-s {d.Serial} shell settings put global ota_disable_automatic_update 1");
+            AppendLog("OTA auto-update disabled");
+        }
+
+        private async Task GenericFactoryReset()
+        {
+            var d = NeedDevice();
+            if (d.Mode != ConnectionMode.ADB || !d.IsAuthorized) { AppendLog("ADB required"); return; }
+            await ProcessRunner.RunAsync(_adb, $"-s {d.Serial} shell recovery --wipe_data");
+            await ProcessRunner.RunAsync(_adb, $"-s {d.Serial} reboot recovery");
+            AppendLog("Factory reset triggered");
         }
 
         private void AppendLog(string msg)
         {
-            if (!Dispatcher.CheckAccess())
-            {
-                Dispatcher.Invoke(() => AppendLog(msg));
-                return;
-            }
+            if (!Dispatcher.CheckAccess()) { Dispatcher.Invoke(() => AppendLog(msg)); return; }
             txtLog.AppendText($"[{DateTime.Now:HH:mm:ss}] {msg}\n");
             txtLog.ScrollToEnd();
         }
 
         private void ClearLog_Click(object sender, RoutedEventArgs e) => txtLog.Clear();
-
         private void Window_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
-            if (e.ChangedButton == MouseButton.Left)
-                DragMove();
+            if (e.ChangedButton == MouseButton.Left) DragMove();
         }
-
         private void Minimize_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
         private void Maximize_Click(object sender, RoutedEventArgs e) =>
             WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
